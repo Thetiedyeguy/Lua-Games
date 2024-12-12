@@ -5,4 +5,4 @@ Exploring how to make Lua games using Love
 My first lua "game" following the tutorial on the Love website
 
 ## Snake
-My first attempt at making a game without a tutorial
+My first attempt at making a game without a tutorial mimicking the iconic snake game
