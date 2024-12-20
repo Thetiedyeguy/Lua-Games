@@ -1,0 +1,278 @@
+local Card = require("card")
+local Button = require("button")
+
+-- Variables
+local shop, hand, playingArea
+local suits, buttons, wells
+local clicked, heldCard, well, wellSpace, origin
+local cardStartX, cardStartY, mouseStartX, mouseStartY
+local windowWidth, windowHeight, windowScale
+local maxCards, maxPlayed = 8, 6
+local error = "no error"
+local blank
+
+-- Constants
+local BASE_WIDTH, BASE_HEIGHT = 1536, 801
+local CARD_WIDTH, CARD_HEIGHT = 90, 120 -- Adjust as needed
+
+-- Initialize Game
+function love.load()
+    math.randomseed(os.time())
+    initWindowScale()
+    clicked = false
+    shop, hand, playingArea, buttons, wells = {}, {}, {}, {}, {}
+    blank = createBlankCard()
+    suits = {"Hearts", "Spades", "Diamonds", "Clubs"}
+
+    -- Initialize Buttons
+    local buttonX, buttonY = windowScale * 100, windowScale * 100
+    table.insert(buttons, Button.new("roll", {0, 0, 1, 1}, {1, 1, 1, 1}, buttonX, buttonY, windowScale * 100, windowScale * 50, windowScale, roll))
+
+    -- Initialize Shop Cards
+    for i = 1, 6 do
+        local suit = suits[math.random(4)]
+        local rank = math.random(10)
+        local x, y = calculateCardPosition(i, windowScale, 175, 100, 50)
+        table.insert(shop, Card.new(suit, rank, x, y, windowScale * 1.75))
+    end
+end
+
+-- Handle Window Resize
+function love.resize(w, h)
+    local oldScale = windowScale
+    initWindowScale()
+    scaleCards(shop, oldScale)
+    scaleCards(hand, oldScale)
+    scaleCards(playingArea, oldScale)
+end
+
+-- Update Logic
+function love.update(dt)
+    if love.mouse.isDown(1) and clicked then
+        updateHeldCardPosition()
+        updateWell()
+    end
+end
+
+-- Draw Scene
+function love.draw()
+    love.graphics.clear(0.6, 0.9, 1)
+    drawDebugInfo()
+    drawButtons()
+    drawCards(shop, calculateShopCardPosition)
+    drawCards(playingArea, calculatePlayingAreaCardPosition)
+    drawHand()
+    if heldCard then heldCard:draw() end
+end
+
+-- Mouse Input Handlers
+function love.mousepressed(x, y, button)
+    if button == 1 then
+        if tryPickCard(hand, "hand", x, y) or
+           tryPickCard(shop, "shop", x, y) or
+           tryPickCard(playingArea, "playingArea", x, y) then
+            return
+        end
+        clickButton(x, y)
+    end
+end
+
+function love.mousereleased(x, y, button)
+    if button == 1 and heldCard then
+        placeHeldCard()
+        resetHeldCard()
+    end
+end
+
+-- Utility Functions
+function initWindowScale()
+    windowWidth, windowHeight = love.graphics.getWidth(), love.graphics.getHeight()
+    windowScale = math.min(windowWidth / BASE_WIDTH, windowHeight / BASE_HEIGHT)
+end
+
+function scaleCards(area, oldScale)
+    for _, card in ipairs(area) do
+        card.scale = (card.scale / oldScale) * windowScale
+        card.x = (card.x / oldScale) * windowScale
+        card.y = (card.y / oldScale) * windowScale
+    end
+end
+
+function calculateCardPosition(index, scale, spacing, offsetX, offsetY)
+    return scale * ((index * spacing) + offsetX), scale * offsetY
+end
+
+function createBlankCard()
+    return Card.new("blank", 1, 0, 0, windowScale * 1.75)
+end
+
+function updateHeldCardPosition()
+    local mouseX, mouseY = love.mouse.getPosition()
+    heldCard.x = cardStartX - (mouseStartX - mouseX)
+    heldCard.y = cardStartY - (mouseStartY - mouseY)
+end
+
+function updateWell()
+    local handClosest, playingAreaClosest, shopClosest, minDistance, minDistanceSpace
+
+    -- Remove previous well
+    removeFromWell()
+
+    -- Find closest wells
+    playingAreaClosest = findClosest(playingArea, windowScale * 100, windowScale * 300)
+    handClosest = findClosest(hand, windowScale * 750, windowScale * 550)
+    shopClosest = findClosest(shop, windowScale * 100, windowScale * 50)
+
+    -- Determine new well
+    if origin == "shop" then
+        if shopClosest[1] < handClosest[1] or #hand >= maxCards then
+            minDistance, minDistanceSpace = shopClosest[2], "shop"
+        else
+            minDistance, minDistanceSpace = handClosest[2], "hand"
+        end
+    elseif origin == "hand" then
+        if handClosest[1] < playingAreaClosest[1] or #playingArea >= maxPlayed then
+            minDistance, minDistanceSpace = handClosest[2], "hand"
+        else
+            minDistance, minDistanceSpace = playingAreaClosest[2], "playingArea"
+        end
+    else
+        minDistance, minDistanceSpace = playingAreaClosest[2], "playingArea"
+    end
+
+    -- Update well
+    well, wellSpace = minDistance or 1, minDistanceSpace or "hand"
+    addToWell()
+end
+
+function removeFromWell()
+    if wellSpace == "hand" then table.remove(hand, well)
+    elseif wellSpace == "shop" then table.remove(shop, well)
+    elseif wellSpace == "playingArea" then table.remove(playingArea, well)
+    end
+end
+
+function addToWell()
+    local target = (wellSpace == "hand" and hand) or
+                   (wellSpace == "shop" and shop) or
+                   (wellSpace == "playingArea" and playingArea)
+    if well > #target then
+        table.insert(target, blank)
+    else
+        table.insert(target, well, blank)
+    end
+end
+
+function findClosest(area, defaultX, defaultY)
+    local minDistance = {-1, nil}
+    local cardCenterX = heldCard.x + CARD_WIDTH / 2 * windowScale
+    local lastSlotIndex = #area + 1
+
+    if #area == 0 then
+        -- Empty area, return default position
+        local dx, dy = cardCenterX - defaultX, heldCard.y - defaultY
+        return {math.sqrt(dx * dx + dy * dy), 1}
+    end
+
+    for i, slot in ipairs(area) do
+        local dx, dy = cardCenterX - slot.x, heldCard.y - slot.y
+        local distance = math.sqrt(dx * dx + dy * dy)
+        if minDistance[1] == -1 or distance < minDistance[1] then
+            minDistance = {distance, i}
+        end
+    end
+
+    -- Consider space after the last slot
+    local lastCard = area[#area]
+    local dx, dy = cardCenterX - (lastCard.x + 175 * windowScale), heldCard.y - lastCard.y
+    local distance = math.sqrt(dx * dx + dy * dy)
+    if distance < minDistance[1] then
+        minDistance = {distance, lastSlotIndex}
+    end
+
+    return minDistance
+end
+
+function tryPickCard(area, areaName, x, y)
+    for i = #area, 1, -1 do
+        if area[i]:mouseOver(x, y) and area[i].suit ~= "blank" then
+            heldCard = table.remove(area, i)
+            cardStartX, cardStartY, mouseStartX, mouseStartY = heldCard.x, heldCard.y, x, y
+            heldCard.scale, clicked, origin = 1.75 * windowScale, true, areaName
+            return true
+        end
+    end
+    return false
+end
+
+function placeHeldCard()
+    if wellSpace == "hand" then
+        table.remove(hand, well)
+        table.insert(hand, well, heldCard)
+    elseif wellSpace == "shop" then
+        table.remove(shop, well)
+        table.insert(shop, well, heldCard)
+    elseif wellSpace == "playingArea" then
+        table.remove(playingArea, well)
+        table.insert(playingArea, well, heldCard)
+    end
+end
+
+function resetHeldCard()
+    well, wellSpace, heldCard, clicked = nil, nil, nil, false
+end
+
+function drawDebugInfo()
+    
+end
+
+function drawButtons()
+    for _, button in ipairs(buttons) do
+        button:draw()
+    end
+end
+
+function drawCards(area, positionFn)
+    for i, card in ipairs(area) do
+        card.x, card.y = positionFn(i)
+        card.scale = 1.75
+        card:draw()
+    end
+end
+
+function calculateShopCardPosition(i)
+    return calculateCardPosition(i, windowScale, 175, 100, 50)
+end
+
+function calculatePlayingAreaCardPosition(i)
+    return calculateCardPosition(i, windowScale, 175, 100, 300)
+end
+
+function drawHand()
+    local handSize = #hand
+    for i, card in ipairs(hand) do
+        local rotation = (i - ((handSize + 1) / 2)) * (math.pi / (handSize + 15))
+        card.scale = 2 * windowScale
+        card.x = (((i - ((handSize + 1) / 2)) * 25) + 750) * windowScale
+        card.y = (550 - (i * 3)) * windowScale
+        card:draw(rotation, "bottom-left")
+    end
+end
+
+function clickButton(x, y)
+    for _, button in ipairs(buttons) do
+        if button:mouseOver(x, y) then
+            button:click()
+            return
+        end
+    end
+end
+
+function roll()
+    shop = {}
+    for i = 1, 6 do
+        local suit, rank = suits[math.random(4)], math.random(10)
+        local x, y = calculateShopCardPosition(i)
+        table.insert(shop, Card.new(suit, rank, x, y, windowScale * 1.75))
+    end
+end
