@@ -1,5 +1,6 @@
 local Shop = {}
 local Card = require("card") -- Ensure Card is required here
+local Data = require("data.card")
 
 function Shop.new(windowScale)
     return setmetatable({
@@ -11,14 +12,16 @@ end
 
 -- Roll new cards for the shop
 function Shop:roll(suits)
-    self.cards = {}
+    for i = #self.cards, 1, -1 do
+        self.cards[i] = nil
+    end
     for i = 1, self.maxCards do
-        local suit = suits[math.random(#suits)]
-        local rank = math.random(1, 10)
+        local index = math.random(#Data)
+        local newCard = Data[index]
         local x = self.windowScale * ((i * 175) + (625 - (175 * ((self.maxCards - 1) / 2))))
         local y = self.windowScale * 50
         local scale = self.windowScale * 1.75
-        self:addCard(Card.new(suit, rank, x, y, scale))
+        self:addCard(Card.new(newCard.name, newCard.type, newCard.description, newCard.image, x, y, scale))
     end
 end
 

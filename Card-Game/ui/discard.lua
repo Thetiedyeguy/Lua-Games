@@ -23,7 +23,11 @@ end
 function Discard:draw()
     for i, card in ipairs(self.cards) do
         card.targetX = (25 + i) * self.windowScale
-        card:draw()
+        if i >= #self.cards - 1 then
+            card:draw()
+        else
+            card:drawCardSkeleton()
+        end
     end
 end
 

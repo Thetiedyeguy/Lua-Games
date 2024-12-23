@@ -30,18 +30,15 @@ end
 
 -- Draw the hand
 function Hand:draw()
-    local handSize = #self.cards
+    local cardSpacing = 175 * self.windowScale
+    local startX = (700 - (175 * (#self.cards / 2))) * self.windowScale
+    local startY = 550 * self.windowScale
+
     for i, card in ipairs(self.cards) do
-        -- Calculate rotation for visual effect
-        local rotation = (i - ((handSize + 1) / 2)) * (math.pi / (handSize + 15))
-        
-        -- Position and scale cards
-        card.scale = 2 * self.windowScale
-        card.targetX = (((i - ((handSize + 1) / 2)) * 25) + 750) * self.windowScale
-        card.targetY = (550 - (i * 3)) * self.windowScale
-        
-        -- Draw the card with rotation
-        card:draw(rotation, "bottom-left")
+        card.targetX = startX + i * cardSpacing
+        card.targetY = startY
+        card.scale = 1.75 * self.windowScale
+        card:draw()
     end
 end
 

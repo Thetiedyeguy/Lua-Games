@@ -17,6 +17,9 @@ local heldCard, clicked, origin
 local cardStartX, cardStartY, mouseStartX, mouseStartY
 local well, wellSpace
 local blank
+local dtotal = 0
+local totalHeldTime, totalHandTime, totalShopTime, totalPlayingArea, totalDeckTime, totalDiscardTime, updateTotalTime = 0, 0, 0, 0, 0, 0, 0
+local drawHeld, drawHand, drawButton, drawShop, drawPlayingArea, drawDeck, drawDiscard, drawTotal = 0, 0, 0, 0, 0, 0, 0, 0
 
 local CARD_WIDTH, CARD_HEIGHT = 90, 120
 
@@ -32,7 +35,7 @@ function love.load()
     deck = Deck.new(windowScale)
     discard = Discard.new(windowScale)
     buttons = {}
-    blank = Card.new("heart", 1, 0, 0, 1.75 * windowScale, "blank")
+    blank = Card.new("blank", "none", "if this is shown there is an error", nil, 0, 0, 1.75 * windowScale, "blank")
 
     -- Add a roll button
     table.insert(buttons, Button.new("Roll", {0, 0, 1, 1}, {1, 1, 1, 1}, 100 * windowScale, 100 * windowScale, 100 * windowScale, 50 * windowScale, windowScale, function()
@@ -55,46 +58,106 @@ end
 
 -- Update the game
 function love.update(dt)
-    if love.mouse.isDown(1) and clicked then
-        updateHeldCardPosition()
-        updateWell()
-    end
-    updateCardLocations(hand)
-    updateCardLocations(shop)
-    updateCardLocations(playingArea)
-    updateCardLocations(deck)
-    updateCardLocations(discard)
-
-    if not discardAnimationComplete then
-        discardAnimationComplete = checkCardMovementComplete(discard)
-        if discardAnimationComplete then
-            dealCards(5) -- Deal cards once animation is done
+    dtotal = dtotal + dt   -- we add the time passed since the last update, probably a very small number like 0.01
+    if dtotal >= 0.02 then
+        dtotal = 0   -- reduce our timer by a second, but don't discard the change... what if our framerate is 2/3 of a second?
+        local totalTimeStart = love.timer.getTime()
+        local startTime = love.timer.getTime()
+        if love.mouse.isDown(1) and clicked then
+            updateHeldCardPosition()
+            updateWell()
         end
+        local endTime = love.timer.getTime()
+        totalHeldTime = totalHeldTime + endTime - startTime
+        startTime = endTime
+        updateCardLocations(hand)
+        endTime = love.timer.getTime()
+        totalHandTime = totalHandTime + endTime - startTime
+        startTime = endTime
+        updateCardLocations(shop)
+        endTime = love.timer.getTime()
+        totalShopTime = totalShopTime + endTime - startTime
+        startTime = endTime
+        updateCardLocations(playingArea)
+        endTime = love.timer.getTime()
+        totalPlayingArea = totalPlayingArea + endTime - startTime
+        startTime = endTime
+        updateCardLocations(deck)
+        endTime = love.timer.getTime()
+        totalDeckTime = totalDeckTime + endTime - startTime
+        startTime = endTime
+        updateCardLocations(discard)
+        endTime = love.timer.getTime()
+        totalDiscardTime = totalDiscardTime + endTime - startTime
+        local totalTimeEnd = love.timer.getTime()
+        updateTotalTime = updateTotalTime + totalTimeEnd - totalTimeStart
+
+        
+        if not discardAnimationComplete then
+            discardAnimationComplete = checkCardMovementComplete(discard)
+            if discardAnimationComplete then
+                dealCards(5) -- Deal cards once animation is done
+            end
+        end
+
+        print("Update Total:", updateTotalTime, "Held:", totalHeldTime / updateTotalTime, ", Hand:", totalHandTime / updateTotalTime, ", Shop:", totalShopTime / updateTotalTime, ", Playing Area:", totalPlayingArea / updateTotalTime, ", Deck:", totalDeckTime / updateTotalTime, ", Discard:", totalDiscardTime / updateTotalTime)
+        print()
     end
 end
 
 -- Draw the game
 function love.draw()
+    local totalTimeStart = love.timer.getTime()
+    local startTime = love.timer.getTime()
     love.graphics.clear(0.6, 0.9, 1)
 
-    love.graphics.print("discard: " .. #discard.cards .. ", deck: " .. #deck.cards .. ", hand" .. #hand.cards, 20, 20)
 
     -- Draw UI components
     shop:draw()
+    local endTime = love.timer.getTime()
+    drawShop = drawShop + endTime - startTime
+    startTime = endTime
     playingArea:draw()
+    endTime = love.timer.getTime()
+    drawPlayingArea = drawPlayingArea + endTime - startTime
+    startTime = endTime
     hand:draw()
+    endTime = love.timer.getTime()
+    drawHand = drawHand + endTime - startTime
+    startTime = endTime
     deck:draw()
+    endTime = love.timer.getTime()
+    drawDeck = drawDeck + endTime - startTime
+    startTime = endTime
     discard:draw()
+    endTime = love.timer.getTime()
+    drawDiscard = drawDiscard + endTime - startTime
+    startTime = endTime
 
     -- Draw buttons
     for _, button in ipairs(buttons) do
         button:draw()
     end
+    endTime = love.timer.getTime()
+    drawButton = drawButton + endTime - startTime
+    startTime = endTime
 
     -- Draw the held card
     if heldCard then
         heldCard:draw()
     end
+    endTime = love.timer.getTime()
+    drawHeld = drawHeld + endTime - startTime
+
+    local totalTimeEnd = love.timer.getTime()
+    drawTotal = drawTotal + totalTimeEnd - totalTimeStart
+
+    love.graphics.setColor(0, 0, 0)
+    love.graphics.print("Update Total:".. math.floor(updateTotalTime + 0.5) .. " Held:".. math.floor(((totalHeldTime / updateTotalTime) * 100)+0.5) .. " Hand:".. math.floor(((totalHandTime / updateTotalTime) * 100)+0.5) .. " Shop:".. math.floor(((totalShopTime / updateTotalTime) * 100)+0.5).. " Playing Area:".. math.floor(((totalPlayingArea / updateTotalTime) * 100)+0.5) .. " Deck:".. math.floor(((totalDeckTime / updateTotalTime) * 100)+0.5).. " Discard:".. math.floor(((totalDiscardTime / updateTotalTime) * 100)+0.5), 20, 5)
+    love.graphics.print("Draw Total:".. math.floor(drawTotal + 0.5) .. " Held:".. math.floor(((drawHeld / drawTotal) * 100)+0.5).. " Button:".. math.floor(((drawButton / drawTotal) * 100)+0.5).. " Hand:".. math.floor(((drawHand / drawTotal) * 100)+0.5).. " Shop:".. math.floor(((drawShop / drawTotal) * 100)+0.5).. " Playing Area:".. math.floor(((drawPlayingArea / drawTotal) * 100)+0.5).. " Deck:".. math.floor(((drawDeck / drawTotal) * 100)+0.5).. " Discard:".. math.floor(((drawDiscard / drawTotal) * 100)+0.5), 20, 25)
+    print("Draw Total:", drawTotal, "Held:", drawHeld / drawTotal, "Button:", drawButton / drawTotal, ", Hand:", drawHand / drawTotal, ", Shop:", drawShop / drawTotal, ", Playing Area:", drawPlayingArea / drawTotal, ", Deck:", drawDeck / drawTotal, ", Discard:", drawDiscard / drawTotal)
+    print()
+    print()
 end
 
 -- Mouse input handlers
@@ -367,8 +430,6 @@ function dealCards(num)
         if drawnCard then
             drawnCard.state = "face-up"
             hand:addCard(drawnCard)
-        else
-            print("No cards left to draw!")
         end
     end
 end

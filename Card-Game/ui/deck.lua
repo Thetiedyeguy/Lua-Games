@@ -8,7 +8,7 @@ function Deck.new(windowScale)
 end
 
 function Deck:addCard(card, index)
-    local x = (200 + #self.cards) * self.windowScale
+    local x = (225 + #self.cards) * self.windowScale
     local y = 550 * self.windowScale
     card.scale = 1.75 * self.windowScale
     card.targetX = x
@@ -22,9 +22,13 @@ end
 
 function Deck:draw()
     for i, card in ipairs(self.cards) do
-        card.targetX = (200 + i) * self.windowScale
+        card.targetX = (225 + i) * self.windowScale
         card.targetY = 550 * self.windowScale
-        card:draw()
+        if i >= #self.cards then
+            card:draw()
+        else
+            card:drawCardSkeleton()
+        end
     end
 end
 

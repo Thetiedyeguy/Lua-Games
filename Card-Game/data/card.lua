@@ -1,3 +1,4 @@
+local basePath = love.filesystem.getSourceBaseDirectory()
 local cardData = {
     {
         name = "Payday",
